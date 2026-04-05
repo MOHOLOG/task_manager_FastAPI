@@ -74,7 +74,7 @@ def get_single_task(
 
     return task
 
-@router.put("/tasks/{task_id}")
+@router.patch("/tasks/{task_id}")
 def edit_task(task_id: int, 
               task: TaskUpdate, 
               current_user: User = Depends(get_current_user),

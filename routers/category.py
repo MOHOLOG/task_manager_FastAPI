@@ -50,7 +50,7 @@ def get_categories(
         has_more=has_more
     )
 
-@router.put("/categories/{category_id}")
+@router.patch("/categories/{category_id}")
 def edit_category(category_id: int,
                   new_name: str,
                   current_user: User = Depends(get_current_user),

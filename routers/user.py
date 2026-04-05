@@ -82,7 +82,7 @@ def read_users_me(
         "token_expire_time": datetime.fromtimestamp(exp)
     }
 
-@router.put("/users/me")
+@router.patch("/users/me")
 def edit_user(update_data: UserUpdate,
               current_user: User = Depends(get_current_user),
               db: Session = Depends(get_db)):
