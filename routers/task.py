@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from numpy import sort
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from typing import Annotated
