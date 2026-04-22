@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 from database import get_db
 from models.user import User
@@ -11,12 +11,12 @@ from crud import category as crud
 router = APIRouter()
 
 @router.post("/categories")
-def create_category(category: CategoryCreate,
+async def create_category(category: CategoryCreate,
                     current_user = Depends(get_current_user),
-                    db: Session = Depends(get_db)):
+                    db: AsyncSession = Depends(get_db)):
     
     current_user_id = current_user.id
-    category_name = crud.create_category(category=category,user_id=current_user_id, db=db)
+    category_name = await crud.create_category(category=category,user_id=current_user_id, db=db)
 
     return {
         "message": "Category created successfully",
@@ -24,8 +24,8 @@ def create_category(category: CategoryCreate,
     }
 
 @router.get("/categories", response_model=PaginatedCategoryResponse)
-def get_categories(
-    db: Session = Depends(get_db),
+async def get_categories(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
@@ -33,7 +33,7 @@ def get_categories(
     sort_parameter: Annotated[SortOrder, Query(alias="sort")] = SortOrder.alphabetic
 ):
     
-    categories, total, has_more = crud.get_categories(
+    categories, total, has_more = await crud.get_categories(
         db=db, 
         user_id=current_user.id, 
         skip=skip, 
@@ -51,12 +51,12 @@ def get_categories(
     )
 
 @router.patch("/categories/{category_id}")
-def edit_category(category_id: int,
+async def edit_category(category_id: int,
                   new_name: str,
                   current_user: User = Depends(get_current_user),
-                  db: Session = Depends(get_db)):
+                  db: AsyncSession = Depends(get_db)):
     try:
-        category = crud.edit_category(category_id=category_id,
+        category = await crud.edit_category(category_id=category_id,
                                     user_id=current_user.id,
                                     new_name=new_name,
                                     db=db)
@@ -73,13 +73,13 @@ def edit_category(category_id: int,
     }
 
 @router.delete("/categories/{category_id}")
-def delete_category(category_id: int,
+async def delete_category(category_id: int,
                     current_user: User = Depends(get_current_user),
-                    db: Session = Depends(get_db)):
+                    db: AsyncSession = Depends(get_db)):
     
     current_user_id = current_user.id
 
-    res = crud.delete_category(category_id=category_id, user_id=current_user_id, db=db)
+    res = await crud.delete_category(category_id=category_id, user_id=current_user_id, db=db)
     if res is None:
         raise HTTPException(status_code=404, detail="Category not found")
     

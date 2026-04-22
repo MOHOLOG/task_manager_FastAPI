@@ -1,7 +1,5 @@
-from fastapi import Depends
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
-from models.category import Category
 from schemas.category import CategoryResponse
 
 class TaskBase(BaseModel):

@@ -1,5 +1,6 @@
 from sqlalchemy import select, func, delete
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from models.task import Task
 from models.category import Category
 from schemas.task import TaskCreate, TaskUpdate, PaginatedTaskResponse, TaskResponse
@@ -7,19 +8,23 @@ from schemas.sort import SortOrder
 
 
 
-def get_all_tasks(user_id: int, 
+async def get_all_tasks(user_id: int, 
                   skip: int, 
                   limit: int, 
                   searched_title: str | None, 
                   sort_parameter: SortOrder,
-                  db: Session):
+                  db: AsyncSession):
     
-    base_query = select(Task).where(Task.user_id == user_id, Task.parent_id.is_(None))
+    base_query = (
+        select(Task)
+        .options(selectinload(Task.category))
+        .where(Task.user_id == user_id, Task.parent_id.is_(None))
+    )
 
     if searched_title:
         base_query = base_query.where(Task.title.icontains(searched_title))
     
-    count_result = db.execute(select(func.count()).select_from(base_query.subquery()))
+    count_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
     total = count_result.scalar() or 0
 
     if sort_parameter == SortOrder.newest:
@@ -32,25 +37,27 @@ def get_all_tasks(user_id: int,
         base_query = base_query.order_by(Task.title.asc())
 
     final_query = base_query.offset(skip).limit(limit)
-    tasks = db.execute(final_query).scalars().all()
+    tasks = await db.execute(final_query)
+    tasks = tasks.scalars().all()
     
     has_more = skip + len(tasks) < total
 
     return tasks, total, has_more
 
-def get_single_task(task_id: int,
+async def get_single_task(task_id: int,
                     user_id: int,
-                    db:Session):
-    task = db.execute(select(Task).where(Task.id == task_id, Task.user_id == user_id)).scalar_one_or_none()
+                    db:AsyncSession):
+    result = await db.execute(select(Task).where(Task.id == task_id, Task.user_id == user_id))
+    task = result.scalar_one_or_none()
     
     if task is None:
         return None
     
     return task
 
-def create_task(task: TaskCreate, 
+async def create_task(task: TaskCreate, 
                 user_id: int, 
-                db: Session):
+                db: AsyncSession):
 
     subtasks_list = task.subtasks
 
@@ -61,12 +68,13 @@ def create_task(task: TaskCreate,
     if task.category_name: 
         category_name = task.category_name
         
-        category_exists = db.execute(
+        result = await db.execute(
             select(Category).where(
                 Category.name == category_name,
                 Category.user_id == user_id
             )
-        ).scalar_one_or_none()
+        )
+        category_exists = result.scalar_one_or_none()
 
         if not category_exists:
             return None 
@@ -82,7 +90,7 @@ def create_task(task: TaskCreate,
         new_task = Task(title=task.title, done=task.done, user_id=user_id)
 
     db.add(new_task)
-    db.flush()
+    await db.flush()
 
     parent_id = new_task.id
     #This logis is for subtasks of the parent task
@@ -96,23 +104,25 @@ def create_task(task: TaskCreate,
         
         db.add(new_subtask)
 
-    db.commit()
-    db.refresh(new_task)
+    await db.commit()
+    await db.refresh(new_task)
     
     return new_task.id, new_task.title, category_name, subtasks_amount
 
-def delete_task(task_id: int, user_id: int, db: Session):
-    task_to_delete = db.execute(select(Task).where(Task.id == task_id, Task.user_id == user_id)).scalar_one_or_none()
+async def delete_task(task_id: int, user_id: int, db: AsyncSession):
+    result = await db.execute(select(Task).where(Task.id == task_id, Task.user_id == user_id))
+    task_to_delete = result.scalar_one_or_none()
     if task_to_delete is None:
         return None
     
-    db.delete(task_to_delete)
-    db.commit()
+    await db.delete(task_to_delete)
+    await db.commit()
 
     return task_to_delete
 
-def edit_task(task_id: int, task: TaskUpdate, user_id: int, db: Session):
-    db_task = db.execute(select(Task).where(Task.id == task_id, Task.user_id == user_id)).scalar_one_or_none()
+async def edit_task(task_id: int, task: TaskUpdate, user_id: int, db: AsyncSession):
+    result = await db.execute(select(Task).where(Task.id == task_id, Task.user_id == user_id))
+    db_task = result.scalar_one_or_none()
     
     if db_task is None:
         return None
@@ -132,9 +142,9 @@ def edit_task(task_id: int, task: TaskUpdate, user_id: int, db: Session):
             db_task.category_id = None
         else:
             # They sent a string, so we find the new folder
-            category = db.execute(
+            category = (await db.execute(
                 select(Category).where(Category.name == cat_name, Category.user_id == user_id)
-            ).scalar_one_or_none()
+            )).scalar_one_or_none()
             
             if category:
                 db_task.category_id = category.id
@@ -143,7 +153,7 @@ def edit_task(task_id: int, task: TaskUpdate, user_id: int, db: Session):
     if "subtasks" in update_data:
         new_subtasks_list = update_data["subtasks"]
 
-        db.execute(delete(Task).where(Task.parent_id == db_task.id))
+        await db.execute(delete(Task).where(Task.parent_id == db_task.id))
 
         for subtask in new_subtasks_list:
             new_subtask = Task(
@@ -154,17 +164,17 @@ def edit_task(task_id: int, task: TaskUpdate, user_id: int, db: Session):
             )
             db.add(new_subtask)
             
-    db.commit()
-    db.refresh(db_task)
+    await db.commit()
+    await db.refresh(db_task)
     return db_task
     
 
-def add_subtask_to_task(subtask: TaskCreate,
+async def add_subtask_to_task(subtask: TaskCreate,
                 task_id: int,
                 user_id: int,
-                db: Session):
+                db: AsyncSession):
     
-    parent_exists = db.execute(select(Task).where(Task.id == task_id, Task.user_id == user_id)).scalar_one_or_none()
+    parent_exists = (await db.execute(select(Task).where(Task.id == task_id, Task.user_id == user_id))).scalar_one_or_none()
 
     if parent_exists is None:
         return None
@@ -177,25 +187,25 @@ def add_subtask_to_task(subtask: TaskCreate,
     )
 
     db.add(new_subtask)
-    db.commit()
-    db.refresh(new_subtask)
+    await db.commit()
+    await db.refresh(new_subtask)
 
     return new_subtask
     
-def get_subtasks(task_id: int,
+async def get_subtasks(task_id: int,
                  user_id: int,
                  skip: int,
                  limit: int,
                  searched_title: str | None,
                  sort_parameter: SortOrder,
-                 db: Session):
+                 db: AsyncSession):
     
     base_query = select(Task).where(Task.parent_id == task_id, Task.user_id == user_id)
 
     if searched_title:
         base_query = base_query.where(Task.title.icontains(searched_title))
 
-    count_result = db.execute(select(func.count()).select_from(base_query.subquery()))
+    count_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
     total = count_result.scalar() or 0
 
     if sort_parameter == SortOrder.newest:
@@ -208,7 +218,7 @@ def get_subtasks(task_id: int,
         base_query = base_query.order_by(Task.title.asc())
     
     final_query = base_query.offset(skip).limit(limit)
-    tasks = db.execute(final_query).scalars().all()
+    tasks = (await db.execute(final_query)).scalars().all()
 
     has_more = skip + len(tasks) < total
 
