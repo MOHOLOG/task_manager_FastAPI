@@ -7,7 +7,7 @@ services:
     volumes:
       - .:/app
     environment:
-      - DATABASE_URL=postgresql://user:pass@db:5432/task_db
+      - DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/task_db
     depends_on:
       - db 
     
