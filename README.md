@@ -1,75 +1,69 @@
 # FastAPI Enterprise Task Manager API
 
-A robust, production-ready RESTful API built with Python and FastAPI. This project goes beyond a simple CRUD application by implementing enterprise-level backend architecture, including hierarchical database relationships, advanced query optimization, and strict security protocols.
+A robust, production-ready RESTful API built with Python and FastAPI. This project implements high-performance asynchronous backend architecture, utilizing a Dockerized PostgreSQL environment, hierarchical data relationships, and strict RS256 security protocols.
 
 ## 🚀 Key Features
 
-* **Hierarchical Data Architecture:** Utilizes SQLAlchemy Adjacency Lists to support infinitely nested Subtasks under main Tasks.
-* **Advanced Querying:** Fully implemented pagination, search filtering, and multi-parameter sorting for optimal database performance.
-* **Ironclad Security (IDOR Protection):** Strict resource ownership checks ensure users can only access and modify their own data.
-* **JWT Authentication:** Secure user registration and login flows using RSA-256 JSON Web Tokens and `bcrypt` password hashing.
-* **Role-Based Access Control (RBAC):** Dependency-injected admin routes and user role verification.
-* **Separation of Concerns:** Clean codebase architecture dividing Routers, CRUD operations, Database Models, Pydantic Schemas, and Security Utilities.
+* **Asynchronous Architecture:** Fully non-blocking I/O operations using SQLAlchemy 2.0 (Async) and asyncpg for high-concurrency performance.
+* **Dockerized Infrastructure:** Seamless deployment and environment consistency using Docker and Docker Compose.
+* **Hierarchical Data:** Supports Tasks, Subtasks, and Categories with optimized relationship loading (selectinload) to prevent N+1 query issues.
+* **Advanced Querying:** Pagination, fuzzy search filtering, and multi-parameter sorting implemented at the database level.
+* **Ironclad Security:** RS256 asymmetric JWT signing, IDOR protection (resource ownership verification), and bcrypt password hashing.
+* **Automated Table Initialization:** Intelligent database startup logic that handles table creation within the async lifecycle.
 
 ## 🛠️ Tech Stack
 
-* **Framework:** FastAPI
-* **Language:** Python 3.10+
-* **Database:** SQLite (Easily swappable to PostgreSQL)
-* **ORM:** SQLAlchemy 2.0
-* **Data Validation:** Pydantic V2
-* **Authentication:** PyJWT, Passlib (Bcrypt)
+* **Framework:** FastAPI (Async)
+* **Language:** Python 3.12
+* **Database:** PostgreSQL 16 (via Docker)
+* **ORM:** SQLAlchemy 2.0 (Asyncio)
+* **Driver:** asyncpg
+* **Authentication:** RS256 (Asymmetric Encryption), cryptography
+* **Containerization:** Docker & Docker Compose
 
-## 💻 Local Setup & Installation
+## 💻 Setup & Installation
 
-Follow these steps to run the API on your local machine.
+The easiest way to run the API is using Docker Compose, which handles the application and the PostgreSQL database automatically.
 
 ### 1. Clone the repository
-```bash
-git clone [https://github.com/MOHOLOG/task_manager_fastapi.git](https://github.com/MOHOLOG/task_manager_fastapi.git)
-cd fastapi-task-manager
-```
 
-### 2. Create a Virtual Environment
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows use: venv\Scripts\activate
-```
+    git clone https://github.com/MOHOLOG/task_manager_fastapi.git
+    cd fastapi-task-manager
 
-### 3. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
+### 2. Configure Environment
 
-### 4. Generate Security Certificates
-This application uses asymmetric RSA keys for JWT signing. You must generate your own keys locally (they are strictly ignored by Git for security).
-Create a `certs` folder in the root directory and generate the keys:
-```bash
-mkdir certs
-cd certs
-ssh-keygen -t rsa -b 4096 -m PEM -f jwt-private.pem
-openssl rsa -in jwt-private.pem -pubout -outform PEM -out jwt-public.pem
-cd ..
-```
+Create a `.env` file in the root directory:
 
-### 5. Run the Server
-```bash
-uvicorn main:app --reload
-```
+    DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/task_db
+    POSTGRES_USER=user
+    POSTGRES_PASSWORD=pass
+    POSTGRES_DB=task_db
+
+### 3. Generate Security Certificates
+
+The API uses asymmetric RSA keys for JWT signing. Create a `certs` folder and generate the keys:
+
+    mkdir certs
+    # Generate Private Key
+    openssl genrsa -out certs/private_key.pem 4096
+    # Extract Public Key
+    openssl rsa -in certs/private_key.pem -pubout -out certs/public_key.pem
+
+### 4. Run with Docker
+
+    docker compose up --build
 
 ## 📖 API Documentation
 
-Once the server is running, FastAPI automatically generates interactive API documentation. 
-Navigate to your browser to explore and test all endpoints:
+The API is served at `http://localhost:8000`. Navigate to the following endpoints to test the system:
 
-* **Swagger UI:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-* **ReDoc:** [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
+* **Swagger UI:** `http://localhost:8000/docs`
+* **ReDoc:** `http://localhost:8000/redoc`
 
 ## 🗂️ Core Endpoints
 
 * `POST /register` - Register a new user
-* `POST /login` - Authenticate and receive a JWT token
-* `PUT /users/me` - Securely update username and password
-* `GET /tasks` - Fetch paginated, sorted, and filtered tasks
-* `GET /tasks/{id}/subtasks` - Fetch paginated children of a specific task
-* `POST /categories` - Create custom organizational categories
+* `POST /login` - Receive an RS256-signed JWT
+* `GET /tasks` - Fetch paginated, sorted, and filtered tasks (including category data)
+* `POST /categories` - Manage custom organizational buckets
+* `PUT /tasks/{id}` - Securely update task status and details
