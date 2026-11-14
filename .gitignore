@@ -17,3 +17,9 @@ env/
 
 # Ignore environment variables
 .env
+
+# Ignore Kilo project-local config and skills
+.kilo/
+
+# Ignore local agent rules
+AGENTS.md
